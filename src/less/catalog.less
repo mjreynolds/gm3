@@ -133,7 +133,7 @@
         }
     }
 
-    .tool.upload, .tool.clear {
+    .tool.upload, .tool.clear, .tool.download, .tool.remove {
         .fa;
     }
 
@@ -143,9 +143,21 @@
         }
     }
 
+    .tool.download {
+        &:before {
+            content: @fa-var-download;
+        }
+    }
+
     .tool.clear {
         &:before {
             content: @fa-var-trash;
+        }
+    }
+
+    .tool.remove {
+        &:before {
+            content: @fa-var-minus-circle;
         }
     }
 
@@ -171,7 +183,7 @@
         }
     }
 
-    .tool.edit {
+    .tool.modify {
         &:before {
             content: "\e09e";
         }
@@ -190,6 +202,36 @@
             content: @fa-var-list-alt;
         }
     }
+
+    .tool.up {
+        .fa;
+
+        &:before {
+            content: @fa-var-arrow-up;
+        }
+    }
+
+    .tool.down {
+        .fa;
+
+        &:before {
+            content: @fa-var-arrow-down;
+        }
+    }
+
+    .tool.fade {
+        opacity: .50;
+    }
+
+    .tool.fade, .tool.unfade {
+        .fa;
+
+        &:before {
+            content: @fa-var-adjust;
+        }
+    }
+
+
 }
 
 .layer.favorite {

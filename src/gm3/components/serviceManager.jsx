@@ -51,6 +51,40 @@ import LengthInput from './serviceInputs/length';
 
 import MeasureTool from './measure';
 
+
+/* Component to control the setting of the buffer distance
+ * for selection shapes.
+ *
+ */
+class SetSelectionBuffer extends Component {
+    /* Set the buffer in the store.
+     *
+     * This is called when the LengthInput changes.
+     *
+     */
+    setBuffer(distance) {
+        this.props.store.dispatch(mapActions.setSelectionBuffer(distance));
+    }
+
+    render() {
+        const d = this.props.store.getState().map.selectionBuffer;
+
+        // inputs require a "field" to render their label and
+        // set their value.  This mocks that up.
+        const mock_field = {
+            label: 'Buffer',
+            value: d,
+            default: d,
+        };
+
+        return (
+            <div>
+                <LengthInput setValue={ (name, value) => { this.setBuffer(value); } } field={ mock_field } />
+            </div>
+        );
+    }
+}
+
 class ServiceManager extends Component {
 
     constructor() {
@@ -59,10 +93,10 @@ class ServiceManager extends Component {
 
         this.finishedQueries = {};
 
-        this.startQuery = this.startQuery.bind(this); 
-        this.drawTool = this.drawTool.bind(this); 
-        this.renderQuery = this.renderQuery.bind(this); 
-        this.renderQueryResults = this.renderQueryResults.bind(this); 
+        this.startQuery = this.startQuery.bind(this);
+        this.drawTool = this.drawTool.bind(this);
+        this.renderQuery = this.renderQuery.bind(this);
+        this.renderQueryResults = this.renderQueryResults.bind(this);
         this.onServiceFieldChange = this.onServiceFieldChange.bind(this);
 
         this.state = {
@@ -121,7 +155,7 @@ class ServiceManager extends Component {
                 fields.push({name: name, value: this.fieldValues[service][name]});
             }
 
-            // check to see if the selection should stay 
+            // check to see if the selection should stay
             //  'alive' in the background.
             if(service_def.keepAlive !== true) {
                 // shutdown the drawing on the layer.
@@ -145,7 +179,7 @@ class ServiceManager extends Component {
      *  @returns a Hash appropriate for dnagerouslySetInnerHTML
      */
     renderQueryResults(queryId, query) {
-        var html_contents = ''; 
+        var html_contents = '';
 
         if(query.progress === 'finished' && this.props.services[query.service]) {
             let service = this.props.services[query.service];
@@ -155,6 +189,8 @@ class ServiceManager extends Component {
             if(service.resultsAsHtml) {
                 html_contents = service.resultsAsHtml(queryId, query);
             }
+        } else {
+            html_contents = "<i class='fa fa-spin fa-refresh'></i>";
         }
 
         return {__html: html_contents};
@@ -196,7 +232,7 @@ class ServiceManager extends Component {
 
 
     /** Activate a drawing tool for selection,
-     *  
+     *
      *  @param type Point, LineString, Polygon
      *
      */
@@ -209,10 +245,11 @@ class ServiceManager extends Component {
     }
 
     shouldComponentUpdate(nextProps, nextState) {
-        // when the drawing type changes this needs to 
+        // when the drawing type changes this needs to
         //  update the service 'page' because those elements
         //  are tied to the state of the interactionType.
-        if(this.props.map.interactionType !== nextProps.map.interactionType 
+        if(this.props.map.interactionType !== nextProps.map.interactionType
+           && nextProps.map.interactionType !== null
            && nextProps.map.activeSource === null) {
             return true;
         }
@@ -246,8 +283,8 @@ class ServiceManager extends Component {
 
         // each array is the same length (see the test above)
         const len = old_keys.length;
-        // the arrays are un-sorted so go through each and 
-        //   if there is any missing keys, then kick back a true 
+        // the arrays are un-sorted so go through each and
+        //   if there is any missing keys, then kick back a true
         for(let i = 0; i < len; i++) {
             let found = false;
             for(let j = 0; j < len && !found; j++) {
@@ -289,7 +326,7 @@ class ServiceManager extends Component {
         return false;
     }
 
-    /** Iterate through all of the queries and execute 
+    /** Iterate through all of the queries and execute
      *  the service's "runQuery" method if the query is
      *  in the appropriate state.
      *
@@ -311,23 +348,25 @@ class ServiceManager extends Component {
     }
 
     componentWillUpdate(nextProps, nextState) {
-        // anytime this updates, the user should really be seeing the service 
+        // anytime this updates, the user should really be seeing the service
         //  tab.
         this.props.store.dispatch(setUiHint('service-manager'));
 
-        // if the measure tool has been triggered, quiet the 
-        //  rest of hte noise.
-        if(nextProps.queries.service === 'measure') {
-
-
-        // when the service changes, then clear out the previous 
-        //  selection features
-        } else if(this.state.lastService !== nextProps.queries.service 
+        if(this.state.lastService !== nextProps.queries.service
            && nextProps.queries.service !== null) {
             let service_def = nextProps.services[nextProps.queries.service];
-            // clear out the previous drawing tool when
-            //  changing services.
-            this.drawTool(service_def.tools.default);
+
+            // some "internal" services won't have a bespoke service_def,
+            //  e.g. measure.
+            if(service_def) {
+                // clear out the previous drawing tool when
+                //  changing services.
+                this.drawTool(service_def.tools.default);
+            } else if(nextProps.queries.service === 'measure') {
+                // handle the measure tool special case and default
+                //  it to Lines...
+                this.drawTool('LineString');
+            }
             // 'rotate' the current servie to the next services.
             this.setState({lastService: nextProps.queries.service, lastFeature: ''});
             // clear out the previous selection feaures.
@@ -337,13 +376,19 @@ class ServiceManager extends Component {
             if(!this.fieldValues[nextProps.queries.service]) {
                 this.fieldValues[nextProps.queries.service] = {};
             }
+
+            // when the seleciton buffer zero, and the service
+            //  does not actually support buffering, remove the buffer.
+            if(this.props.map.selectionBuffer !== 0
+               && (!service_def || !service_def.bufferAvailable)) {
+                this.props.store.dispatch(mapActions.setSelectionBuffer(0));
+            }
         } else {
             let service_name = this.state.lastService;
             let service_def = nextProps.services[service_name];
-
             // if this service has 'autoGo' and the feature is different
             //  than the last one, then execute the query.
-            if(service_def && service_def.autoGo) { 
+            if(service_def && service_def.autoGo) {
                 let selection = nextProps.store.getState().map.selectionFeatures;
                 if(selection.length > 0) {
                     // okay, there *is* a selection feature.
@@ -356,7 +401,7 @@ class ServiceManager extends Component {
             }
         }
 
-        // check the queries and see if the services need to 
+        // check the queries and see if the services need to
         //  dispatch anything
         this.checkQueries(nextProps.queries);
     }
@@ -365,15 +410,46 @@ class ServiceManager extends Component {
         this.fieldValues[this.props.queries.service][name] = value;
     }
 
-    getServiceField(i, field) {
+    getServiceField(i, field, value) {
         switch(field.type) {
             case 'select':
-                return (<SelectInput setValue={this.onServiceFieldChange} key={'field-' + i} field={field}/>);
+                return (<SelectInput setValue={this.onServiceFieldChange} key={'field-' + i} field={field} value={value}/>);
             case 'length':
-                return (<LengthInput setValue={this.onServiceFieldChange} key={'field-' + i} field={field}/>);
+                return (<LengthInput setValue={this.onServiceFieldChange} key={'field-' + i} field={field} value={value}/>);
             case 'text':
             default:
-                return (<TextInput setValue={this.onServiceFieldChange} key={'field-' + i} field={field}/>);
+                return (<TextInput setValue={this.onServiceFieldChange} key={'field-' + i} field={field} value={value}/>);
+        }
+    }
+
+    /** Function to handle bashing "Enter" and causing
+     *  the service form to submit.
+     *
+     *  @param evt The event from the div.
+     *
+     */
+    handleKeyboardShortcuts(serviceName, evt) {
+        const code = evt.which;
+        if(code === 13) {
+            this.startQuery(serviceName);
+        } else if(code === 27) {
+            this.closeForm();
+        }
+    }
+
+    /** Implement a small post-render hack to focus on the first
+     *  input element of a service form.
+     */
+    componentDidUpdate() {
+        if(this.props.queries.service !== null) {
+            // look for an input in the service form and then
+            //  focus on the first one, as available.
+            if(this.refs.serviceForm) {
+                const inputs = this.refs.serviceForm.getElementsByTagName('input');
+                if(inputs.length > 0) {
+                    inputs[0].focus();
+                }
+            }
         }
     }
 
@@ -386,8 +462,10 @@ class ServiceManager extends Component {
             let service_name = this.props.queries.service;
             let service_def = this.props.services[service_name];
 
+            const show_buffer = service_def.bufferAvailable;
+
             const service_tools = [];
-            for(let gtype of ['Point', 'MultiPoint', 'LineString', 'Polygon']) {
+            for(let gtype of ['Point', 'MultiPoint', 'LineString', 'Polygon', 'Select', 'Modify']) {
                 const dt_key = 'draw_tool_' + gtype;
                 if(service_def.tools[gtype]) {
                     service_tools.push(<DrawTool key={dt_key} store={this.props.store} geomType={gtype} />);
@@ -398,13 +476,30 @@ class ServiceManager extends Component {
 
             for(let i = 0, ii = service_def.fields.length; i < ii; i++) {
                 const field = service_def.fields[i];
-                service_fields.push(this.getServiceField(i, field));
+                let value = field.default;
+                if(this.fieldValues[this.props.queries.service][field.name]) {
+                    value = this.fieldValues[this.props.queries.service][field.name];
+                } else {
+                    this.fieldValues[this.props.queries.service][field.name] = value;
+                }
+
+                service_fields.push(this.getServiceField(i, field, value));
+
+            }
+
+            let buffer_controls = false;
+            if(show_buffer) {
+                buffer_controls = <SetSelectionBuffer store={ this.props.store } map={ this.props.map }/>
             }
 
             return (
-                <div className="service-manager">
+                <div className="service-manager"
+                    ref='serviceForm'
+                    onKeyUp={ (evt) => { this.handleKeyboardShortcuts(service_name, evt); } } >
+
                     <h3>{service_def.title}</h3>
                     { service_tools }
+                    { buffer_controls }
                     { service_fields }
                     <div className="tab-controls">
                         <button className="close-button" onClick={() => { this.closeForm() }}><i className="close-icon"></i> Close</button>

@@ -23,10 +23,12 @@
  */
 
 /** Collection of functions for defining a WMS layers in a GeoMoose map.
- * 
+ *
  */
 
 import * as util from '../../util';
+import Image from 'ol/layer/image';
+import ImageWMS from 'ol/source/imagewms';
 
 /** Create the parameters for a WMS layer.
  *
@@ -43,7 +45,7 @@ function defineSource(mapSource) {
     return {
         url: mapSource.urls[0],
         // This is a carry over from previous generations behaviour.
-        ratio: 1.0, 
+        ratio: 1.0,
         params: Object.assign({'LAYERS': layers.join(',')}, mapSource.params),
         serverType: mapSource.serverType
     }
@@ -57,8 +59,8 @@ function defineSource(mapSource) {
  *  @returns OpenLayers Layer instance.
  */
 export function createLayer(mapSource) {
-    return new ol.layer.Image({
-        source: new ol.source.ImageWMS(defineSource(mapSource))
+    return new Image({
+        source: new ImageWMS(defineSource(mapSource))
     });
 }
 
@@ -101,6 +103,7 @@ export function getLegend(mapSource, mapView, layerName) {
         'VERSION': '1.1.0',
         'WIDTH': '250',
         'LAYER': layerName,
+        'FORMAT': 'image/png',
     }, mapSource.params);
 
     const images = [];

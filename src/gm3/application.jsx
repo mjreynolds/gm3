@@ -53,6 +53,7 @@ import Modal from './components/modal';
 
 import React from 'react';
 import ReactDOM from 'react-dom';
+import proj4 from 'proj4';
 
 import { getLayerFromPath, getQueryableLayers, getActiveMapSources } from './actions/mapSource';
 
@@ -112,7 +113,102 @@ class Application {
         this.actions[actionName] = new actionClass(this, options);
     }
 
+    /** Configure the default results layer.
+     *
+     *  This layer needs to exist so the map will properly render
+     *  query reuslts.
+     *
+     */
+    configureResultsLayer() {
+        // add a layer that listens for changes
+        //  to the query results.  This hs
+        this.store.dispatch(mapSourceActions.add({
+            name: 'results',
+            urls: [],
+            type: 'vector',
+            label: 'Results',
+            opacity: 1.0,
+            queryable: false,
+            refresh: null,
+            layers: [],
+            params: {},
+            // stupid high z-index to ensure results are
+            //  on top of everything else.
+            zIndex: 200001,
+        }));
+        this.store.dispatch(mapSourceActions.addLayer('results', {
+            name: 'results',
+            on: true,
+            style: {
+                'circle-radius': 4,
+                'circle-color': '#ffff00',
+                'circle-stroke-color': '#ffff00',
+                'line-color': '#ffff00',
+                'line-width': 4,
+                'fill-color': '#ffff00',
+                'fill-opacity': 0.25,
+                'line-opacity': 0.25,
+            },
+            filter: []
+        }));
+        // the "hot" layer shows the features as red on the map,
+        //  namely useful for hover-over functionality.
+        this.store.dispatch(mapSourceActions.addLayer('results', {
+            name: 'results-hot',
+            on: true,
+            style: {
+                'circle-radius': 4,
+                'circle-color': '#ff0000',
+                'circle-stroke-color': '#ff0000',
+                'line-color': '#ff0000',
+                'line-width': 4,
+                'fill-color': '#ff0000',
+                'fill-opacity': 0.50,
+                'line-opacity': 0.50,
+            },
+            filter: ['==', 'displayClass', 'hot']
+        }));
+
+    }
+
+    configureSelectionLayer() {
+        // add a layer that listens for changes
+        //  to the query results.  This hs
+        this.store.dispatch(mapSourceActions.add({
+            name: 'selection',
+            urls: [],
+            type: 'vector',
+            label: 'Selection',
+            opacity: 1.0,
+            queryable: false,
+            refresh: null,
+            layers: [],
+            params: {},
+            // stupid high z-index to ensure results are
+            //  on top of everything else.
+            zIndex: 200002,
+        }));
+        this.store.dispatch(mapSourceActions.addLayer('selection', {
+            name: 'selection',
+            on: true,
+            style: {
+                'circle-radius': 4,
+                'circle-color': '#8470ff',
+                'circle-stroke-color': '#8470ff',
+                'line-color': '#8470ff',
+                'line-width': 4,
+                'fill-color': '#8470ff',
+                'fill-opacity': 0.50,
+                'line-opacity': 0.50,
+            },
+            filter: []
+        }));
+    }
+
     populateMapbook(mapbookXml) {
+        this.configureSelectionLayer();
+        this.configureResultsLayer();
+
         // load the map-sources
         let sources = mapbookXml.getElementsByTagName('map-source');
         for(let i = 0, ii = sources.length; i < ii; i++) {
@@ -132,6 +228,26 @@ class Application {
         for(let action of toolbar_actions) {
             this.store.dispatch(action);
         }
+
+        // Add the selection layer,
+        //  this is used to preview the user's selection.
+        /*
+        mapSourceActions.add({
+            type: 'vector',
+            name: 'selection',
+            style: {
+                'circle-radius': 4,
+                'circle-color': '#ffff00',
+                'circle-stroke-color': '#ffff00',
+                'line-color' : '#ffff00',
+                'line-width' : 4,
+                'fill-color' : '#ffff00',
+                'fill-opacity' : 0.25
+            }
+        });
+        */
+
+
     }
 
     loadMapbook(options) {
@@ -178,11 +294,104 @@ class Application {
      *  @param selection A GeoMoose selection description
      *  @param fields    Array of {name:, value:, operation: } of fields to query.
      *  @param layers    Array of layer paths to query against.
+     *  @param templatesIn Template name or Array of template names that should be ready.
      *
      */
-    dispatchQuery(service, selection, fields, layers) {
+    dispatchQuery(service, selection, fields, layers, templatesIn = []) {
         const single_query = this.config.multipleQuery ? false : true;
-        this.store.dispatch(mapActions.createQuery(service, selection, fields, layers, single_query));
+        const template_promises = [];
+
+        // convert the "templatesIn" to an array.
+        let templates = templatesIn;
+        if(typeof(templatesIn) === 'string') {
+            templates = [templatesIn];
+        }
+
+        // iterate through the layer and the templates.
+        for(const layer of layers) {
+            for(const template of templates) {
+                // gang the promises together.
+                template_promises.push(this.getTemplate(layer, template));
+            }
+        }
+
+        // require all the promises complete,
+        //  then dispatch the store.
+        Promise.all(template_promises).then(() => {
+            this.store.dispatch(mapActions.createQuery(service, selection, fields, layers, single_query));
+        });
+    }
+
+    /** Get a template's contents on promise.
+     *
+     *  @param path     The layer path.
+     *  @param template The name of the template.
+     *
+     * @returns A promise for when the contents of the template is resolved.
+     */
+    getTemplate(path, template) {
+        const template_promise = new Promise((resolve, reject) => {
+            if(template.substring(0, 1) === '@') {
+                let template_name = template.substring(1);
+                let layer = getLayerFromPath(this.store, path);
+                let layer_template = layer.templates[template_name];
+
+                if(layer_template) {
+                    if(layer_template.type === 'alias') {
+                        // TODO: Someone is likely to think it's funny to do multiple
+                        //       levels of aliasing, this should probably look through that
+                        //       possibility.
+                        resolve(layer.templates[layer_template.alias].contents);
+                    } else if(layer_template.type === 'remote') {
+                        const ms_name = util.getMapSourceName(path);
+                        const layer_name = util.getLayerName(path);
+
+                        // fetch the contents of the template
+                        util.xhr({
+                            url: layer_template.src,
+                            success: (content) => {
+                                // convert the "remote" template to a local one
+                                this.store.dispatch(
+                                    mapSourceActions.setLayerTemplate(
+                                        ms_name, layer_name,
+                                        template_name, {
+                                            type: 'local',
+                                            contents: content
+                                        }
+                                    )
+                                );
+                                // resolve this promise with the content
+                                resolve(content);
+                            },
+                            // when there is an error fetching the template,
+                            // 404 or whatever, return a blank template.
+                            error: function() {
+                                resolve('');
+                            },
+                        });
+                    } else {
+                        resolve(layer.templates[template_name].contents);
+                    }
+                } else {
+                    // TODO: It may be wiser to allow services to specify
+                    //       how failure to find a template should be handled.
+                    //       - Identify will simply not render features.
+                    //       - Select could have a critical failure without
+                    //          an appropriate template.
+
+                    // commented this out because it was causing identify on layers
+                    //  without an identify template to fail the entire query.
+
+                    // console.info('Failed to find template.', path, template_name);
+                    // reject('Failed to find template. ' + path + '@' + template_name);
+
+                    // resolve this as an empty template.
+                    resolve('');
+                }
+            }
+        });
+
+        return template_promise;
     }
 
     /** Render feeatures from a query using a specified template.
@@ -323,6 +532,25 @@ class Application {
         this.store.dispatch(mapSourceActions.changeFeatures(ms_name, layer_name, filter, properties));
     }
 
+    /* Shorthand for manipulating result features.
+     */
+    changeResultFeatures(filter, properties) {
+        this.changeFeatures('results/results', filter, properties);
+    }
+
+    /* Short hand for toggling the highlight of features.
+     */
+    highlightFeatures(filter, on) {
+        const props = {displayClass: on ? 'hot' : ''};
+        this.changeResultFeatures(filter, props);
+    }
+
+    /* Clear highlight features
+     */
+    clearHighlight() {
+        this.highlightFeatures({displayClass: 'hot'}, false);
+    }
+
     /** Clears the UI hint.  Used by applications to indicate
      *  that the previous "hint" has been handled.
      */
@@ -342,7 +570,7 @@ class Application {
         }
     }
 
-    /** Check to see if the state has an 'action' 
+    /** Check to see if the state has an 'action'
      *  to be executed.  Run it and then clear the state.
      */
     runAction() {
@@ -373,21 +601,8 @@ class Application {
         // pass
     }
 
-    /** Bridge to a useful AJAX handler.
-     *
-     *  this is really a direct bridge to reqwest, which is the
-     *  httplib used by the application.
-     *
-     *  @param {Object} opts The options for Reqwest.
-     *
-     */
-    xhr(opts) {
-        return Request(opts);
-    }
-
     /* Show an alert type dialog
      */
-
     alert(signature, message, callback = null) {
         const options = [
             {label: 'Okay', value: 'dismiss'}
@@ -410,9 +625,9 @@ class Application {
             var body = document.getElementsByTagName('body')[0];
             var modal_div = document.createElement('div');
             body.appendChild(modal_div);
-           
+
             // configure the new props.
-            const props = { 
+            const props = {
                 title: title,
                 onClose: callback,
                 options,
@@ -429,7 +644,31 @@ class Application {
         // open the dialog
         this.dialogs[signature].setState({open: true});
     }
+
+    /* Set the view of the map
+     *
+     * @param view {Object} A view definition containing center and zoom or resolution
+     *
+     */
+    setView(view) {
+        this.store.dispatch(mapActions.setView(view));
+    }
+
+    /**
+     * addProjection
+     * - A function that can be called by the user to add a custom projection.
+     * - Facade for adding a projection to the proj4 registry, which then allows its use
+     *     when calling the proj4 or OpenLayers libraries.
+     *
+     * @param {Object} projDef - an object containing an ID and a definition for a projection
+     * @param {string} projDef.ref - a string ID that will be used to refer to defined projection
+     * @param {string} projDef.def - a string definition of the projection, in WKT/Proj format
+     */
+    addProjection(projDef) {
+        util.addProjDef(proj4, projDef.ref, projDef.def);
+    }
+
 };
 
 
-export default Application; 
+export default Application;

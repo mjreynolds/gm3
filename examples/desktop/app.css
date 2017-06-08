@@ -31,9 +31,11 @@ body {
 
 #tabs, #map, #results-grid{
     position: absolute;
-    overflow: auto;
     top: 75px; left: 0;
-    right: 60%;
+}
+
+#map, #results-grid {
+    overflow: auto;
 }
 
 #map {
@@ -49,7 +51,7 @@ body {
     border-bottom: solid 1px black;
 
     background-color: #eee;
-    
+
     height: 75px;
 }
 
@@ -62,10 +64,6 @@ body {
     border-top: solid 1px black;
 }
 
-#map, #results-grid {
-    left: 40%;
-    right: 0;
-}
 
 #map .map {
     position: absolute;
@@ -82,8 +80,64 @@ body {
 
 #footer {
     position: absolute;
-    bottom: 0; 
+    bottom: 0;
     height: 20px;
     left: 0; width: 100%;
     border-top: solid 1px black;
+}
+
+#version {
+    float: left;
+    width: 15%;
+
+    padding-left: 20px;
+    background-image: url(logo-mini.png);
+    background-repeat: no-repeat;
+    background-position: 2px 1px;
+
+    padding-top: 1px;
+}
+
+#coordinate-display {
+    float: left;
+    width: 68%;
+    text-align: center;
+    overflow: hidden;
+}
+
+#jump-to-extent {
+    float: right;
+    width: 14%;
+}
+
+#map, #results-grid {
+    right: 0;
+}
+
+/* This is the main "layout" code that handles the split
+ * between the map, grid, and tabs.
+ */
+
+@media screen and (max-width: 500px) {
+    body {
+        font-size: 60%;
+    }
+
+    #tabs {
+        width: 220px;
+    }
+
+    #map, #results-grid {
+        left: 220px;
+    }
+}
+
+@media screen and (min-width: 500px) {
+    #tabs {
+        width: 350px;
+    }
+
+    #map, #results-grid {
+        left: 350px;
+    }
 }

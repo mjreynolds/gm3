@@ -23,8 +23,11 @@
  */
 
 /** Collection of functions for defining a ArcGIS Rest layers in a GeoMoose map.
- * 
+ *
  */
+
+import TileLayer from 'ol/layer/tile';
+import ArcRestSource from 'ol/source/tilearcgisrest';
 
 /** Create the parameters for a ArcGIS REST Services layer.
  *
@@ -42,8 +45,8 @@ function defineSource(mapSource) {
  *  @returns OpenLayers Layer instance.
  */
 export function createLayer(mapSource) {
-    return new ol.layer.Tile({
-        source: new ol.source.TileArcGISRest(defineSource(mapSource))
+    return new TileLayer({
+        source: new ArcRestSource(defineSource(mapSource))
     });
 }
 
@@ -60,4 +63,4 @@ export function updateLayer(map, layer, mapSource) {
         src.setUrl(defn.url);
     }
 }
-    
+

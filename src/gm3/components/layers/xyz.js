@@ -23,10 +23,13 @@
  */
 
 /** Collection of functions for defining a XYZ layers in a GeoMoose map.
- * 
+ *
  */
 
 import * as util from '../../util';
+
+import XYZSource from 'ol/source/xyz';
+import TileLayer from 'ol/layer/tile';
 
 /** Create the parameters for a XYZ layer.
  *
@@ -44,8 +47,8 @@ function defineSource(mapSource) {
  *  @returns OpenLayers Layer instance.
  */
 export function createLayer(mapSource) {
-    return new ol.layer.Tile({
-        source: new ol.source.XYZ(defineSource(mapSource))
+    return new TileLayer({
+        source: new XYZSource(defineSource(mapSource))
     });
 }
 
@@ -73,4 +76,4 @@ export function updateLayer(map, layer, mapSource) {
         src.setUrls(defn.urls);
     }
 }
-    
+

@@ -1,4 +1,4 @@
-/** Demo test application.  
+/** Demo test application.
  *
  *  WARNING! ACHTUNG! THIS IS FOR DEVELOPMENT PURPOSES ONLY!!!
  *
@@ -37,35 +37,45 @@ var app = new gm3.Application({
 app.uiUpdate = function(ui) {
     // when the UI hint is set for the service manager
     //  show the service manager tab.
-    if(ui.hint == 'service-manager') {
+    if(ui.hint == 'service-manager' || ui.hint == 'service-start') {
         showTabByName('service-tab');
         app.clearHint();
     }
 }
 
 app.loadMapbook({url: 'mapbook.xml'}).then(function() {
+    // set the default view.
+    app.setView({
+        center: [ -10370351.141856, 5550949.728470501 ],
+        zoom: 12
+    });
+
+    // establish some state trackers
     var tracker = new gm3.trackers.LocalStorageTracker(app.store);
+    var hash_tracker = new gm3.trackers.HashTracker(app.store);
 
     tracker.restore();
+    hash_tracker.restore();
+
+    app.addProjection({
+        ref: 'EPSG:26915',
+        def: '+proj=utm +zone=15 +ellps=GRS80 +datum=NAD83 +units=m +no_defs'
+    });
 
     app.registerService('identify', IdentifyService);
     app.registerService('search', SearchService);
     app.registerService('select', SelectService, {
         queryLayers: [
-            {value: 'vector-parcels/ms:parcels', label: 'Parcels'}
+            {value: 'vector-parcels/ms:parcels', label: 'Parcels'},
+            //{value: 'ags-vector-dc20/20', label: 'Dakota County Streets'},
+            {value: 'ags-vector-dc16/16', label: 'Dakota County Rail'}
         ]
     });
 
-    // check to see if the 'bing key' has been defined,
-    //  if so, use Bing as the geocoder otherwise the application
-    //  will show a "can't find the service" message.
-    // BING_KEY should be set in globals.js
-    if(typeof(CONFIG.bing_key) !== 'undefined') {
-        app.registerService('geocode', BingGeocoder, {
-            key: CONFIG.bing_key 
-        });
-    }
-
+    // This uses the OpenStreetMap Nominatim geocoder,
+    // there is also a BingGeocoder service, but requires
+    // signing up for Bing and getting an appropriate usage key.
+    app.registerService('geocode', OSMGeocoder, {});
     app.registerAction('findme', FindMeAction);
 
     app.registerAction('fullextent', ZoomToAction, {
@@ -80,22 +90,52 @@ app.loadMapbook({url: 'mapbook.xml'}).then(function() {
     app.add(gm3.components.Grid, 'results-grid');
     app.add(gm3.components.Version, 'version');
     app.add(gm3.components.CoordinateDisplay, 'coordinate-display', {
-        usng: true, latLon: true
+        projections:  [
+            {
+                label: 'X,Y',
+                ref: 'xy'
+            },
+            {
+                label: 'USNG',
+                ref: 'usng'
+            },
+            {
+                label: 'Lat,Lon',
+                ref: 'EPSG:4326',
+                precision: 3
+            }
+        ]
     });
-    app.add(gm3.components.Map, 'map', {
-        center: [ -10370351.141856, 5550949.728470501 ],
-        zoom: 12
+
+    app.add(gm3.components.JumpToExtent, 'jump-to-extent', {
+        locations:  [
+            {
+                label: 'Parcel Boundaries',
+                extent: [-10384071.6,5538681.6,-10356783.6,5563600.1]
+            },
+            {
+                label: 'Dakota County',
+                extent: [-10381354,5545268,-10328765,5608252]
+            },
+            {
+                label: 'Minnesota',
+                extent: [-10807000,5440700,-9985100,6345700]
+            }
+        ]
     });
+
+    app.add(gm3.components.Map, 'map', {});
 
     var print_preview = app.add(gm3.components.PrintModal, 'print-preview', {});
     app.registerAction('print', function() {
         this.run = function() {
-           print_preview.setState({open: true}); 
+           print_preview.setState({open: true});
         }
     }, {});
-            
+
 
     tracker.startTracking();
+    hash_tracker.startTracking();
 
     showTab('catalog');
 });

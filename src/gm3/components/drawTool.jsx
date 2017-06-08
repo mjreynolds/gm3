@@ -77,8 +77,8 @@ class DrawTool extends Component {
         let select_options = '';
 
 
-        // ensures the state of the drawing tool 
-        // matches what is checked. 
+        // ensures the state of the drawing tool
+        // matches what is checked.
         if(this.props.map.interactionType === gtype) {
             tool_class += ' selected';
         }
@@ -91,6 +91,8 @@ class DrawTool extends Component {
                 { this.getSelectOptions() }
               </select>
             );
+        } else if(gtype === 'Modify') {
+            tool_label = 'Modify Feature';
         } else if(gtype === 'LineString') {
             tool_label = 'Draw Line';
         } else if(gtype === 'MultiPoint') {

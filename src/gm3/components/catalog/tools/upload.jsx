@@ -28,6 +28,9 @@ import { connect } from 'react-redux';
 import * as msActions from '../../../actions/mapSource';
 import Modal from '../../modal';
 
+import KMLFormat from 'ol/format/kml';
+import GeoJSONFormat from 'ol/format/geojson';
+
 /* Present the user with a helpful modal dialog
  * for uploading their data to the map.
  */
@@ -55,7 +58,7 @@ class UploadModal extends Modal {
             </div>
         );
     }
-    
+
     parseFiles() {
         // grab the list of files.
         const files = this.refs.fileInput.files;
@@ -78,19 +81,19 @@ class UploadModal extends Modal {
             reader.onload = (function(file) {
                 return function(e) {
                     // geojson is always used as the output format.
-                    const geojson_format = new ol.format.GeoJSON();
+                    const geojson_format = new GeoJSONFormat();
 
                     // input_format is defaulted to null and only
                     //  set if the file format can be inferred.
                     let input_format = null;
                     if(file.type.indexOf('kml') >= 0) {
                         // sweet, KML file.
-                        input_format = new ol.format.KML();
+                        input_format = new KMLFormat();
                     } else {
                         // try to see if it is JSON parseable
                         try {
                             JSON.parse(e.target.result);
-                            input_format = new ol.format.GeoJSON();
+                            input_format = new GeoJSONFormat();
                         } catch(err) {
                             // swallow the exception.
                         }
@@ -116,7 +119,7 @@ class UploadModal extends Modal {
                         self.props.store.dispatch(msActions.addFeatures(
                             src.mapSourceName, src.layerName, collection.features));
 
-                        // TODO: Notify the user that n-number of features 
+                        // TODO: Notify the user that n-number of features
                         //       were added to the layer.
                         // this.store.dispatch(createNotice('info', '...'));
                     } else {
@@ -154,7 +157,7 @@ export class UploadTool extends Component {
 
     constructor() {
         super();
-        this.showModal = this.showModal.bind(this); 
+        this.showModal = this.showModal.bind(this);
     }
 
     showModal() {

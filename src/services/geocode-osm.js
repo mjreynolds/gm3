@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 
-function BingGeocoder(Application, options) {
+function OSMGeocoder(Application, options) {
     /** Define the title of the service. */
     this.title = options.title ? options.title : 'Search address';
 
@@ -46,9 +46,9 @@ function BingGeocoder(Application, options) {
      *  other than the demo application.
      */
     this.template = '<div class="search-result">' +
-                    '<a onClick="app.zoomToExtent([{{ bbox.1 }}, {{ bbox.0 }}, {{ bbox.3 }}, {{ bbox.2 }}], \'EPSG:4326\')" class="zoomto-link">' +
+                    '<a onClick="app.zoomToExtent([{{ boundingbox.2 }}, {{ boundingbox.0 }}, {{ boundingbox.3 }}, {{ boundingbox.1 }}], \'EPSG:4326\')" class="zoomto-link">' +
                         '<i class="fa fa-search"></i>' +
-                        '{{ name }}' +
+                        '{{ display_name }}' +
                     '</a>' +
                     '</div>';
 
@@ -65,17 +65,15 @@ function BingGeocoder(Application, options) {
     };
 
     this.runQuery = function(queryId, query) {
-        var bing_url = 'http://dev.virtualearth.net/REST/v1/Locations';
+        var osm_url = 'http://nominatim.openstreetmap.org/search/';
         // boom kick this off.
         var highlight_path = this.highlightPath;
         gm3.util.xhr({
-            url: bing_url,
-            type: 'jsonp',
-            jsonp: 'jsonp',
-            jsonpCallback: 'jsonp',
+            url: osm_url,
+            type: 'json',
             data: {
-                key: options.key,
-                query: query.fields[0].value
+                format: 'json',
+                q: query.fields[0].value
             },
             success: function(results) {
                 // populate the reuslts
@@ -83,7 +81,7 @@ function BingGeocoder(Application, options) {
                     id: queryId,
                     type: 'MAP_QUERY_RESULTS',
                     // this is a bit of a cheat.
-                    layer: 'geocoder', features: results.resourceSets[0].resources,
+                    layer: 'geocoder', features: results,
                 });
                 // mark this as finished.
                 Application.dispatch({
@@ -91,26 +89,21 @@ function BingGeocoder(Application, options) {
                     type: 'MAP_QUERY_FINISHED'
                 });
 
-
-                // convert the Bing resource into a geojson feature.
-                var features = [];
-                var resources = results.resourceSets[0].resources;
-                for(var i = 0, ii = resources.length; i < ii; i++) {
-                    var r = resources[i];
+                let features = [];
+                for(var i = 0, ii = results.length; i < ii; i++) {
+                    var r = results[i];
                     features.push({
                         type: 'Feature',
                         geometry: {
                             type: 'Point',
-                            coordinates: [
-                                r.point.coordinates[1],
-                                r.point.coordinates[0]
-                            ]
+                            coordinates: [r.lon, r.lat]
                         },
                         properties: {
                             id: 'address' + i
                         }
                     });
                 }
+
                 if(features.length > 0) {
                     Application.clearFeatures(highlight_path);
                     Application.addFeatures(highlight_path, features);
@@ -119,7 +112,7 @@ function BingGeocoder(Application, options) {
         });
     };
 
-    /** Query the Bing Geocoder Service/.
+    /** Query the OSM Geocoder Service/.
      */
     this.query = function(selection, fields) {
         Application.dispatchQuery(this.name, selection, fields, []);

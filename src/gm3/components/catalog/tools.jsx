@@ -31,10 +31,11 @@ import * as mapActions from '../../actions/map';
 import { setLegendVisibility } from '../../actions/catalog';
 
 import * as util from '../../util';
+import ModalDialog from '../modal';
 
 /** Generic class for basic "click this, do this" tools.
  */
-class Tool extends Component {
+export class Tool extends Component {
     constructor(props) {
         super(props);
 
@@ -55,7 +56,41 @@ class Tool extends Component {
     }
 }
 
-/** Clears features from a vector layer. 
+/* Confirmation dialog for clearing a layer.
+ *
+ */
+class ClearDialog extends ModalDialog {
+
+    getTitle() {
+        return 'Clear features';
+    }
+
+    renderBody() {
+        return (
+            <div>
+                Remove all features from the selected layer?
+            </div>
+        );
+    }
+
+    close(status) {
+        if(status === 'clear') {
+            let src = this.props.layer.src[0];
+            this.props.store.dispatch(
+                msActions.clearFeatures(src.mapSourceName, src.layerName));
+        }
+        this.setState({open: false});
+    }
+
+    getOptions() {
+        return [
+            {label: 'Cancel', value: 'dismiss'},
+            {label: 'Clear', value: 'clear'},
+        ];
+    }
+}
+
+/** Clears features from a vector layer.
  *
  */
 export class ClearTool extends Tool {
@@ -66,9 +101,16 @@ export class ClearTool extends Tool {
     }
 
     onClick() {
-        let src = this.props.layer.src[0];
-        this.props.store.dispatch(
-            msActions.clearFeatures(src.mapSourceName, src.layerName));
+        this.refs.modal.setState({open: true});
+    }
+
+    render() {
+        return (
+            <span>
+                <i className={this.iconClass} onClick={this.onClick} title={this.tip}></i>
+                <ClearDialog ref='modal' store={this.props.store} layer={this.props.layer} />
+            </span>
+        );
     }
 }
 
@@ -80,8 +122,17 @@ export class DrawTool extends Tool {
         super(props);
 
         this.tip = 'Add a ' + props.drawType + ' to the layer';
+
+        if(props.drawType === 'modify') {
+            this.tip = 'Modify a drawn feature';
+        } else if (props.drawType === 'remove') {
+            this.tip = 'Remove a feature from the layer';
+        }
+
         this.iconClass = props.drawType + ' tool';
         this.drawType = {
+            'remove': 'Remove',
+            'modify': 'Modify',
             'point': 'Point',
             'line': 'LineString',
             'polygon': 'Polygon'
@@ -146,5 +197,108 @@ export class LegendToggle extends Tool {
         this.props.store.dispatch(
             setLegendVisibility(this.props.layer.id, this.props.layer.legend !== true)
         );
+    }
+}
+
+/* Move the layer up in the stack.
+ */
+export class UpTool extends Tool {
+    constructor() {
+        super();
+        this.tip = 'Move layer up in the order'
+        this.iconClass = 'up tool';
+
+        this.direction = -1;
+    }
+
+    onClick() {
+        // this is the map-source to go "up"
+        let up_src = this.props.layer.src[0];
+
+        const state = this.props.store.getState();
+        const layer_order = util.getLayersByZOrder(state.catalog, state.mapSources);
+
+        const actions = [];
+        for(let i = 0, ii = layer_order.length; i < ii; i++) {
+            const layer = layer_order[i];
+            if(layer.layer.src[0].mapSourceName === up_src.mapSourceName) {
+                const swap = i + this.direction;
+                if(swap >= 0 && swap <= ii) {
+                    const current_z = layer.zIndex;
+                    const new_z = layer_order[swap].zIndex;
+                    const other_ms = layer_order[swap].layer.src[0].mapSourceName;
+
+                    actions.push(msActions.setMapSourceZIndex(up_src.mapSourceName, new_z));
+                    actions.push(msActions.setMapSourceZIndex(other_ms, current_z));
+                }
+            }
+        }
+
+        for(const action of actions) {
+            this.props.store.dispatch(action);
+        }
+    }
+}
+
+/* Move the layer down in the stack.
+ */
+export class DownTool extends UpTool {
+    constructor() {
+        super();
+        this.tip = 'Move layer down in the order';
+        this.iconClass = 'down tool';
+        this.direction = 1;
+    }
+}
+
+/* Tool to "fade" a layer. Aka, take away opacity.
+ */
+export class FadeTool extends Tool {
+    constructor() {
+        super();
+        this.tip = 'Fade layer';
+        this.iconClass = 'fade tool';
+        this.direction = -.10;
+    }
+
+    onClick() {
+        // get the current state and the first src.
+        const state = this.props.store.getState();
+
+        // hash the unique map sources.
+        const map_sources = {};
+
+        for(const src of this.props.layer.src) {
+            map_sources[src.mapSourceName] = true;
+        }
+
+        for(const ms_name in map_sources) {
+            console.log('setting for ', ms_name);
+            // get the current opacity
+            const ms_opacity = state.mapSources[ms_name].opacity;
+
+            // calculate the new opacity.
+            let new_opacity = ms_opacity + this.direction;
+
+            // check the bounds
+            if(new_opacity < 0) {
+                new_opacity = 0;
+            } else if(new_opacity > 1) {
+                new_opacity = 1;
+            }
+
+            this.props.store.dispatch(msActions.setOpacity(ms_name, new_opacity));
+        }
+    }
+}
+
+/* Tool to "unfade" a layer. Aka, add opacity.
+ */
+export class UnfadeTool extends FadeTool {
+    constructor() {
+        super();
+        this.tip = 'Unfade layer';
+        this.iconClass = 'unfade tool';
+        this.direction = .10;
     }
 }

@@ -32,11 +32,12 @@ import * as util from '../util';
 
 const default_view = {
     center: [0, 0],
-    resolution: 1000,
+    resolution: null,
     extent: null,
     activeSource: null,
     interactionType: null,
-    selectionFeatures: []
+    selectionFeatures: [],
+    selectionBuffer: 0,
 };
 
 export default function mapReducer(state = default_view, action) {
@@ -49,7 +50,7 @@ export default function mapReducer(state = default_view, action) {
                 extent: null
             };
             for(const key of ['center', 'zoom', 'resolution']) {
-                if(action[key]) {
+                if(typeof(action[key]) !== 'undefined') {
                     new_view[key] = action[key];
                 }
             }
@@ -58,7 +59,7 @@ export default function mapReducer(state = default_view, action) {
             return Object.assign({}, state, {extent: {bbox: action.extent, projection: action.projection}});
         case MAP.CHANGE_TOOL:
             return Object.assign({}, state, {
-                activeSource: action.src, 
+                activeSource: action.src,
                 interactionType: action.tool
             })
         case MAP.ADD_SELECTION_FEATURE:
@@ -68,6 +69,10 @@ export default function mapReducer(state = default_view, action) {
         case MAP.CLEAR_SELECTION_FEATURES:
             return Object.assign({}, state, {
                 selectionFeatures: []
+            });
+        case MAP.BUFFER_SELECTION_FEATURES:
+            return Object.assign({}, state, {
+                selectionBuffer: action.meters
             });
         default:
             return state;

@@ -45,10 +45,12 @@ function SelectService(Application, options) {
 
     /** Limit the number of selection tools available */
     this.tools = {
-        'Point': true, 
+        'Point': true,
         'MultiPoint': true,
-        'Polygon': true, 
-        'LineString': true, 
+        'Polygon': true,
+        'LineString': true,
+        'Select': true,
+        'Modify': true,
         'default': 'Polygon',
         'buffer': true
     };
@@ -72,9 +74,12 @@ function SelectService(Application, options) {
         options: options.queryLayers ? options.queryLayers : []
     }];
 
+    /** Alow shapes to be buffered. */
+    this.bufferAvailable = true;
+
     /** This function is called everytime there is an select query.
      *
-     *  @param selection contains a GeoJSON feature describing the 
+     *  @param selection contains a GeoJSON feature describing the
      *                   geography to be used for the query.
      *
      *  @param fields    is an array containing any user-input
@@ -84,7 +89,7 @@ function SelectService(Application, options) {
         // get the query layer.
         var query_layer = fields[0].value;
         // dispatch the query against on the query layer!
-        Application.dispatchQuery(this.name, selection, [], [query_layer]);
+        Application.dispatchQuery(this.name, selection, [], [query_layer], [this.template]);
     }
 
 
@@ -117,7 +122,7 @@ function SelectService(Application, options) {
 
     /** renderQueryResults is the function called to let the service
      *                     run basically any code it needs to execute after
-     *                     the query has been set to finish.  
+     *                     the query has been set to finish.
      *
      *  WARNING! This will be called multiple times. It is best to ensure
      *           there is some sort of flag to prevent multiple renderings.
@@ -132,23 +137,5 @@ function SelectService(Application, options) {
         //  this line has not finished, this prevents an accidental
         //  double-rendering.
         this.hasRendered[queryId] = true;
-
-        // render a set of features on a layer.
-        var all_features = [];
-        for(var i = 0, ii = query.layers.length; i < ii; i++) {
-            var path = query.layers[i];
-            if(query.results[path] && !query.results[path].failed) {
-                all_features = all_features.concat(query.results[path]);
-            }
-        }
-
-        // when features have been returned, clear out the old features
-        //  and put the new features on the highlight layer.
-        if(all_features.length > 0) {
-            Application.clearFeatures(this.highlightPath);
-            Application.addFeatures(this.highlightPath, all_features);
-        }
     }
-
-
 }

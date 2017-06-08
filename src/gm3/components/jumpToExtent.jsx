@@ -24,54 +24,38 @@
 
 import React, { Component } from 'react';
 
-import uuid from 'uuid';
+import { zoomToExtent } from '../actions/map';
 
-export default class TextInput extends Component {
-
+/**
+ * JumpToExtent
+ * Allows the user to zoom to a user-defined set of boundaries
+ *
+ * @param {Object[]} props.locations - an array of boundary definitions that the user can zoom to
+ * @param {string} props.locations[].label - the label for the boundary
+ * @param {number[]} props.locations[].extent - the extent of the boundary
+ *      - in the form [minx, miny, maxx, maxy]
+ *      - Extent must be in the same projection as the map
+ */
+export default class JumpToExtent extends Component {
     constructor(props) {
         super(props);
-
-        this.state = {
-            value: props.value ? props.value : props.field.default ? props.field.default : ''
-        };
-
-        this.onChange = this.onChange.bind(this);
+        this.onExtentSelect = this.onExtentSelect.bind(this);
     }
-
-    getId() {
-        return uuid.v4();
+    onExtentSelect(event) {
+        let selectedBboxIndex = event.target.value;
+        let extent = this.props.locations[selectedBboxIndex].extent;
+        this.props.store.dispatch(zoomToExtent(extent));
     }
-
-    getValue() {
-        return this.state.value;
-    }
-
-    getName() {
-        return this.props.field.name;
-    }
-
-    onChange(evt) {
-        const v = evt.target.value;
-        this.setState({value: v});
-
-        this.setValue(this.getName(), v);
-    }
-
-    setValue(name, value) {
-        // do nothing, this is meant for the parent to hook into.
-        this.props.setValue(name, value);
-    }
-
-
     render() {
-        const id = this.getId();
+        let options = this.props.locations.map(function(location, index) {
+            return <option key={index} value={index}>{location.label}</option>;
+        });
 
         return (
-            <div className='service-input'>
-                <label htmlFor={ 'input-' + id }>{ this.props.field.label }</label>
-                <input onChange={this.onChange} value={this.state.value} type="text" id={ 'input-' + id}></input>
-            </div>
+            <select value="default" onChange={this.onExtentSelect}>
+                <option disabled key="default" value="default">Zoom To Extent...</option>
+                {options}
+            </select>
         );
     }
-
-}
+};

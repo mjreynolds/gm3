@@ -42,11 +42,20 @@ import { changeFeatures, filterFeatures } from '../util';
 function setLayerAttribute(state, action, attr) {
     // make a copy of the layers list
     let layers = [];
+    if(!state[action.mapSourceName]) {
+        // no state changes if we can't find the mapsource.
+        return state;
+    }
+
     for(var i = 0, ii = state[action.mapSourceName].layers.length; i < ii; i++) {
         // copy each layer and update the matching one.
         let layer = Object.assign({}, state[action.mapSourceName].layers[i]);
         if(layer.name === action.layerName) {
-            layer[attr] = action[attr];
+            if(action.type === MAPSOURCE.SET_TEMPLATE) {
+                layer.templates[action.name] = action.template;
+            } else {
+                layer[attr] = action[attr];
+            }
         }
         layers.push(layer);
     }
@@ -60,7 +69,6 @@ function setLayerAttribute(state, action, attr) {
 
     return Object.assign({}, state, mix);
 }
-
 
 /** Change the features in a layer.
  *
@@ -92,7 +100,12 @@ function changeLayerFeatures(state, action) {
             if(action.type === MAPSOURCE.ADD_FEATURES) {
                 // add an ID to the features
                 for(var x = 0, xx = action.features.length; x < xx; x++) {
-                    action.features[x][id_prop] = uuid();
+                    const id_mixin = {};
+                    id_mixin[id_prop] = uuid();
+                    action.features[x].properties = Object.assign({},
+                        action.features[x].properties,
+                        id_mixin
+                    );
                 }
                 layer.features = layer.features.concat(action.features);
                 layer.featuresVersion += 1;
@@ -116,6 +129,9 @@ function changeLayerFeatures(state, action) {
             } else if(action.type === MAPSOURCE.CHANGE_FEATURES) {
                 layer.features = changeFeatures(layer.features, action.filter, action.properties);
                 layer.featuresVersion += 1;
+            } else if(action.type === MAPSOURCE.MODIFY_GEOMETRY) {
+                layer.features = changeFeatures(layer.features, {'_uuid': action.id}, null, action.geometry);
+                layer.featuresVersion += 1;
             }
             layers.push(layer);
 
@@ -138,15 +154,32 @@ function changeLayerFeatures(state, action) {
 }
 
 export default function mapSource(state = [], action) {
+    const new_elem = {};
+
     switch(action.type) {
+        case MAPSOURCE.SET_ATTRIBUTE:
+            return setLayerAttribute(state, action);
         case MAPSOURCE.LAYER_VIS:
             return setLayerAttribute(state, action, 'on');
         case MAPSOURCE.LAYER_FAVORITE:
-            return setLayerAttribute(state, action, 'favorite'); 
+            return setLayerAttribute(state, action, 'favorite');
+        case MAPSOURCE.SET_TEMPLATE:
+            return setLayerAttribute(state, action);
         case MAPSOURCE.ADD:
-            const new_elem = {};
             new_elem[action.mapSource.name] = action.mapSource;
             return Object.assign({}, state, new_elem);
+        case MAPSOURCE.SET_Z:
+            const new_z_ms = {};
+            new_z_ms[action.mapSourceName] = Object.assign({},
+                                                           state[action.mapSourceName],
+                                                           {zIndex: action.zIndex});
+            return Object.assign({}, state, new_z_ms);
+        case MAPSOURCE.SET_OPACITY:
+            const new_opacity_ms = {};
+            new_opacity_ms[action.mapSourceName] = Object.assign({},
+                                                           state[action.mapSourceName],
+                                                           {opacity: action.opacity});
+            return Object.assign({}, state, new_opacity_ms);
         case MAPSOURCE.ADD_LAYER:
             if(state[action.mapSourceName]) {
                 const ms = {};
@@ -175,6 +208,7 @@ export default function mapSource(state = [], action) {
         case MAPSOURCE.REMOVE_FEATURE:
         case MAPSOURCE.REMOVE_FEATURES:
         case MAPSOURCE.CHANGE_FEATURES:
+        case MAPSOURCE.MODIFY_GEOMETRY:
             if(state[action.mapSourceName]) {
                 return changeLayerFeatures(state, action);
             }
